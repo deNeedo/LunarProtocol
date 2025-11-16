@@ -1,43 +1,31 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -Iinclude
+LDFLAGS = -lrt
 
-SRC = $(wildcard src/*.c)
-OBJ = $(patsubst src/%.c, build/%.o, $(SRC))
-# Exclude main.o for tests
-LIB_OBJ = $(filter-out build/main.o, $(OBJ))
+SRC_DIR = src
+BUILD_DIR = build
 
-TEST_SRC = $(wildcard tests/*.c)
-TEST_BIN = $(patsubst tests/%.c, build/%, $(TEST_SRC))
+PROGRAMS = hub rover
 
-TARGET = build/comms_v1.0
+# Automatically map program names to build outputs
+TARGETS = $(addprefix $(BUILD_DIR)/, $(PROGRAMS))
 
-# Default rule: run tests, then build
-all: test $(TARGET)
+# .c → .o for all source files
+OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(BUILD_DIR)/%.o, $(wildcard $(SRC_DIR)/*.c))
 
-build/%.o: src/%.c
-	mkdir -p build
+all: $(TARGETS)
+
+# Generic build rule: build/<program> from build/<program>.o
+$(BUILD_DIR)/%: $(BUILD_DIR)/%.o
+	$(CC) $^ -o $@ $(LDFLAGS)
+
+# Generic .o compilation rule
+$(BUILD_DIR)/%.o: $(SRC_DIR)/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(TARGET): $(OBJ)
-	$(CC) $(CFLAGS) $(OBJ) -o $(TARGET)
-	@echo "✅ Build successful: $(TARGET)"
-
-# Build and run each test
-test: $(TEST_BIN)
-	@echo "Running tests..."
-	@for t in $(TEST_BIN); do \
-		echo "→ $$t"; \
-		./$$t || { echo "❌ Test failed: $$t"; exit 1; }; \
-	done
-	@echo "✅ All tests passed."
-
-# Compile test binaries (without main.o)
-build/%: tests/%.c $(LIB_OBJ)
-	mkdir -p build
-	$(CC) $(CFLAGS) $< $(LIB_OBJ) -o $@
-
-run: all
-	./$(TARGET)
+# Ensure build directory exists
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
 clean:
-	rm -rf build $(TARGET)
+	rm -rf $(BUILD_DIR)
