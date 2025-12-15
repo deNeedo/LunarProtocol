@@ -1,12 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <mqueue.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include "frame.h"
 
-#define HUB_INBOX   "/hub_inbox"
+#include "../include/frame.h"
+
+#define HUB_INBOX "/hub_inbox"
 #define ROVER_OUTBOX "/rover_outbox"
 
 int main() {
@@ -36,16 +36,15 @@ int main() {
         ssize_t bytes_read = mq_receive(hub_in, (char *)&f, sizeof(Frame), NULL);
 
         if (bytes_read > 0) {
-            printf("[HUB] From Rover %d: CMD=%d  MSG=%s\n",
-                f.sender_id, f.command, f.payload);
+            printf("[HUB] From Rover %d: CMD=%d  MSG=%s\n", f.sender_id, f.msg_type, f.payload);
 
             Frame ack = {0};
             ack.version = 1;
             ack.sender_id = 0;
-            ack.to_hub = 0;
-            ack.command = 999;
+            ack.target_id = 0;
+            ack.msg_type = 0;
             snprintf(ack.payload, PAYLOAD_SIZE, "ACK for rover %d", f.sender_id);
-
+            
             mq_send(rover_out, (char *)&ack, sizeof(Frame), 0);
         }
 
