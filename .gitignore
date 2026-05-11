@@ -1,2 +1,10 @@
-build/
+#Ignore IDE config files
+.vscode/
+#Ignore all build files
+*/build/
+#Ignore ESP-IDF project config
+sdkconfig
+#Ignore libraries
+components
+#Ignore all PNG files
 *.png

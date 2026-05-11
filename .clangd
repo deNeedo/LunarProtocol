@@ -1,0 +1,11 @@
+CompileFlags:
+  # Strip Xtensa GCC-only flags that clang doesn't understand.
+  Remove: [-mlongcalls, -fno-shrink-wrap, -fstrict-volatile-bitfields, -fno-tree-switch-conversion, -fzero-init-padding-bits=all, -fno-malloc-dce]
+
+Diagnostics:
+  # Optional: disable clangd's unused-include nagging
+  UnusedIncludes: None
+  # ESP-IDF toolchain headers sometimes aren't visible to clangd, which can
+  # cause noisy "file not found" errors (e.g. machine/endian.h). Suppress those.
+  Suppress:
+    - "pp_file_not_found"
