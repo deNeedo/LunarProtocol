@@ -11,12 +11,12 @@ void setFlag() {
 }
 
 void initRadio() {
-  int state = radio.begin(868.0);
+  int state = radio.begin(875.0, 500.0, 8, 8);
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println("Radio OK");
     pinMode(LORA_LED, OUTPUT);
-    radio.setDio1Action(setFlag);
-    radio.startReceive();
+    // radio.setDio1Action(setFlag);
+    // radio.startReceive();
   }
 }
 
@@ -29,24 +29,26 @@ bool channelFree() {
 
 bool sendPacket(Packet* pkt) {
   // for (int i = 0; i < 3; i++) {
-  delay(DEVICE_ID * 1000);
+  // delay(DEVICE_ID * 1000);
   // if (!channelFree()) {delay(random(5, 25)); continue;}
   int state = radio.transmit((uint8_t*)pkt, sizeof(Packet));
   if (state == RADIOLIB_ERR_NONE) {
-    packetCounter++; blink(); radio.startReceive(); return true;
+    packetCounter++; blink(); /*radio.startReceive();*/ return true;
   }
   // }
-  radio.startReceive(); return false;
+  /*radio.startReceive();*/ return false;
 }
 
 bool receivePacket(Packet* pkt) {
-  if (!receivedFlag) return false;
-  receivedFlag = false;
-  int state = radio.readData((uint8_t*)pkt, sizeof(Packet));
+  // if (!receivedFlag) return false;
+  // receivedFlag = false;
+  int state = radio.receive((uint8_t*)pkt, sizeof(Packet));
   timeOfArrival = millis();
-  radio.startReceive();
-  if (state != RADIOLIB_ERR_NONE) return false;
-  if (pkt->sender == DEVICE_ID) return false;
-  if (pkt->receiver != DEVICE_ID && pkt->receiver != 255) return false;
-  blink(); return true;
+  // radio.startReceive();
+  if (state == RADIOLIB_ERR_NONE) {
+    if (pkt->sender == DEVICE_ID) return false; /*ignore own*/
+    if (pkt->receiver != DEVICE_ID && pkt->receiver != 255) return false; /*ignore not for me*/
+    blink(); return true;
+  }
+  return false;
 }

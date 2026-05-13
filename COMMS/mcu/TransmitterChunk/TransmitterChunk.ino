@@ -2,18 +2,22 @@
 
 SX1262 radio = new Module(41, 39, 42, 40);
 
-struct Packet {
-  uint8_t senderId;
-  uint32_t timestamp;
-  float value;
+#define MAX_MESSAGES 10
+#define LISTEN_TIME 10000
+
+const uint8_t MY_ID = 0;
+
+// Structure for received messages
+struct ReceivedMessage {
+
+  uint8_t deviceId;
+  String message;
 };
 
-#define MAX_PACKETS 50
-#define LISTEN_TIME 5000
+// Array to store received packets
+ReceivedMessage receivedMessages[MAX_MESSAGES];
 
-Packet receivedPackets[MAX_PACKETS];
-
-int packetCount = 0;
+int messageCount = 0;
 
 void setup() {
 
@@ -22,116 +26,127 @@ void setup() {
   int state = radio.begin(875, 125, 7, 7);
 
   if(state != RADIOLIB_ERR_NONE) {
+
     Serial.println("Radio init failed!");
+
     while(true);
   }
 
-  Serial.println("Radio ready");
+  Serial.println("LoRa transmitter ready");
 }
 
 void loop() {
 
   // =====================================================
-  // 1. SEND OWN PACKET
+  // 1. SEND PING
   // =====================================================
 
-  Packet myPacket;
+  String pingMessage = "PING";
 
-  myPacket.senderId = 1;
-  myPacket.timestamp = millis();
-  myPacket.value = random(100, 300) / 10.0;
-
-  int state = radio.transmit((uint8_t*)&myPacket,
-                             sizeof(myPacket));
+  int state = radio.transmit(pingMessage);
 
   if(state == RADIOLIB_ERR_NONE) {
-    Serial.println("Packet sent");
-  } else {
+
+    Serial.println();
+    Serial.println("PING sent");
+  }
+  else {
+
     Serial.print("Send failed: ");
     Serial.println(state);
+
+    delay(2000);
+    return;
   }
 
   // =====================================================
-  // 2. START LISTENING WINDOW
+  // 2. START LISTENING
   // =====================================================
 
-  packetCount = 0;
+  messageCount = 0;
 
   uint32_t listenStart = millis();
 
-  Serial.println("Listening...");
+  Serial.println("Listening for responses...");
 
   while(millis() - listenStart < LISTEN_TIME) {
 
-    Packet incomingPacket;
+    String received;
 
-    state = radio.receive((uint8_t*)&incomingPacket,
-                          sizeof(incomingPacket));
+    state = radio.receive(received);
 
     if(state == RADIOLIB_ERR_NONE) {
 
-      // ignore own packets
-      if(incomingPacket.senderId == myPacket.senderId) {
-        continue;
-      }
+      Serial.print("Received: ");
+      Serial.println(received);
 
-      if(packetCount < MAX_PACKETS) {
+      // ============================================
+      // Parse format:
+      // PONG;ID=2;MSG=1
+      // ============================================
 
-        receivedPackets[packetCount] = incomingPacket;
+      int idStart = received.indexOf("ID=");
+      int msgStart = received.indexOf(";MSG=");
 
-        Serial.print("Received from ID ");
-        Serial.print(incomingPacket.senderId);
+      if(idStart >= 0 && msgStart >= 0) {
 
-        Serial.print(" value=");
-        Serial.println(incomingPacket.value);
+        String idText =
+          received.substring(idStart + 3, msgStart);
 
-        packetCount++;
+        uint8_t deviceId = idText.toInt();
+
+        // ignore own packets
+        if(deviceId == MY_ID) {
+          continue;
+        }
+
+        if(messageCount < MAX_MESSAGES) {
+
+          receivedMessages[messageCount].deviceId =
+            deviceId;
+
+          receivedMessages[messageCount].message =
+            received;
+
+          messageCount++;
+
+          // stop early if array full
+          if(messageCount >= MAX_MESSAGES) {
+
+            Serial.println("Max messages reached");
+            break;
+          }
+        }
       }
     }
   }
 
   // =====================================================
-  // 3. PROCESS RECEIVED PACKETS
+  // 3. DISPLAY RESULTS
   // =====================================================
 
   Serial.println();
-  Serial.println("=== PROCESSING ===");
+  Serial.println("=== RECEIVED MESSAGES ===");
 
-  sortPackets();
+  if(messageCount == 0) {
 
-  for(int i = 0; i < packetCount; i++) {
+    Serial.println("No messages received");
+  }
 
-    Serial.print("ID: ");
-    Serial.print(receivedPackets[i].senderId);
+  for(int i = 0; i < messageCount; i++) {
 
-    Serial.print(" Time: ");
-    Serial.print(receivedPackets[i].timestamp);
+    Serial.print("#");
+    Serial.print(i + 1);
 
-    Serial.print(" Value: ");
-    Serial.println(receivedPackets[i].value);
+    Serial.print(" Device ID: ");
+    Serial.print(receivedMessages[i].deviceId);
+
+    Serial.print(" Content: ");
+    Serial.println(receivedMessages[i].message);
   }
 
   Serial.println("=== END ===");
   Serial.println();
 
-  delay(2000);
-}
-
-void sortPackets() {
-
-  for(int i = 0; i < packetCount - 1; i++) {
-
-    for(int j = i + 1; j < packetCount; j++) {
-
-      if(receivedPackets[i].senderId >
-         receivedPackets[j].senderId) {
-
-        Packet temp = receivedPackets[i];
-
-        receivedPackets[i] = receivedPackets[j];
-
-        receivedPackets[j] = temp;
-      }
-    }
-  }
+  delay(5000);
 }

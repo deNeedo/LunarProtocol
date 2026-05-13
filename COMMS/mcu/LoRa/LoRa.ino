@@ -1,13 +1,14 @@
-// // Libraries
-// #include "TestPing.h"
+// Libraries
+#include "TestSuite.h"
 
-// void setup() {
-//   // Open serial port
-//   Serial.begin(115200);
-//   // Setup radio
-//   initRadio();
-// }
+void setup() {
+  // Open serial port
+  Serial.begin(115200);
+  // Setup radio
+  initRadio();
+}
 
-// void loop() {
-//   pingRadio();
-// }
+void loop() {
+  // measureDistance();
+  pingDevice();
+}

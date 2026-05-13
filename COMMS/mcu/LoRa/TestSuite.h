@@ -5,4 +5,6 @@
 #include "RadioManager.h"
 #include "StateMachine.h"
 
-void pingRadio();
+void pingDevice();
+
+void measureDistance();
