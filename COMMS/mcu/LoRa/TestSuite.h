@@ -8,3 +8,5 @@
 void pingDevice();
 
 void measureDistance();
+
+void clockSync();

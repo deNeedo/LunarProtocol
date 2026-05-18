@@ -3,18 +3,11 @@
 
 #include <Arduino.h>
 
-extern uint8_t DEVICE_ID;
-extern uint8_t TOTAL_DEVICES;
+extern const uint8_t DEVICE_ID;
+extern const uint8_t TOTAL_DEVICES;
+extern const uint32_t PING_TIMEOUT;
+extern const uint32_t PING_MAX_MESSAGES;
 
 extern uint16_t packetCounter;
-extern bool waitingForAck;
-
-extern uint32_t LISTEN_TIME;
-extern uint32_t lastPing;
-extern uint32_t beginPing;
-extern uint32_t endPing;
-
-extern uint32_t timeOfArrival;
-extern uint32_t timeSpent;
 
 #endif
