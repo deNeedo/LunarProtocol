@@ -51,20 +51,19 @@ void measureDistance(uint8_t SID, uint8_t RID) {
   if (DEVICE_ID == SID) {
     pktOut = createPacket(1, DEVICE_ID, RID, packetCounter, 0, millis(), "PING");
     sendPacket(&pktOut, 1);
-    Serial.println("Packet sent");
+    Serial.printf("DEVICE_%d: Packet sent.\n", DEVICE_ID);
     if (receivePacket(&pktIn, 2)) {
-      Serial.println("Received ACK");
+      float rssi = radio.getRSSI(true); float snr  = radio.getSNR();
+      Serial.printf("DEVICE_%d: Packet received. RSSI: %f | SNR: %f\n", DEVICE_ID, rssi, snr);
     }
   }
   if (DEVICE_ID == RID) {
     if (receivePacket(&pktIn, 1)) {
-      float rssi = radio.getRSSI(true);
-      float snr  = radio.getSNR();
-      // rssiSum += rssi; // snrSum += snr; // sampleCount++;
-      Serial.printf("RSSI: "); Serial.println(rssi);
-      Serial.printf("SNR: "); Serial.println(snr);
-      pktOut = createPacket(2, DEVICE_ID, pktIn.sender, packetCounter, 0, millis(), "PING");
+      float rssi = radio.getRSSI(true); float snr  = radio.getSNR();
+      Serial.printf("DEVICE_%d: Packet received. RSSI: %f | SNR: %f\n", DEVICE_ID, rssi, snr);
+      pktOut = createPacket(2, DEVICE_ID, pktIn.sender, packetCounter, 0, millis(), "PONG");
       sendPacket(&pktOut, 1);
+      Serial.printf("DEVICE_%d: Packet sent.\n", DEVICE_ID);
     }
   }
 }

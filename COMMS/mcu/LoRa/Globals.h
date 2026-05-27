@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "Packet.h"
 
-#define DEVICE_ID 1
+#define DEVICE_ID 0
 #define TOTAL_DEVICES 3
 #define PING_TIMEOUT 3000
 #define MESSAGE_CHUNK_SIZE 3
