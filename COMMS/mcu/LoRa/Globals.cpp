@@ -1,8 +1,16 @@
 #include "Globals.h"
 
-const uint8_t DEVICE_ID = 2;
-const uint8_t TOTAL_DEVICES = 3;
-const uint32_t PING_TIMEOUT = 2000;
-const uint32_t PING_MAX_MESSAGES = 3;
+bool ackArray[TOTAL_DEVICES] = {};
 
+uint8_t messageCounter = 0;
 uint16_t packetCounter = 0;
+uint16_t pingResult = 0;
+uint32_t syncedTime = 0;
+uint32_t syncedTimeRelay = 0;
+uint32_t pingTimings[MESSAGE_CHUNK_SIZE] = {};
+
+Packet empty = {};
+Packet pktIn = {};
+Packet pktOut = {};
+// Packet incomingQueue[(TOTAL_DEVICES - 1) * MESSAGE_CHUNK_SIZE] = {};
+// Packet outgoingQueue[(TOTAL_DEVICES - 1) * MESSAGE_CHUNK_SIZE] = {};

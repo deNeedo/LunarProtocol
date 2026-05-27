@@ -15,7 +15,8 @@ extern volatile bool receivedFlag;
 
 void initRadio();
 bool channelFree();
-bool sendPacket(Packet* pkt);
-bool receivePacket(Packet* pkt);
+bool checkReadiness();
+bool sendPacket(Packet* pkt, uint8_t number);
+bool receivePacket(Packet* pkt, uint8_t type);
 
 #endif

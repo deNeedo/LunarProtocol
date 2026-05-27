@@ -4,7 +4,7 @@
 #include <Arduino.h>
 
 struct __attribute__((packed)) Packet {
-  uint8_t type; // command type, 1 = PING; 2 = ACK; 3 = ...
+  uint8_t type; // command type, 1 = PING; 2 = ACK; 3 = SYNC; 4 = RELAY
   uint8_t sender; //  should always be set to DEVICE_ID
   uint8_t receiver; // 0 = HUB; N = ROVER nr N; 255 = ALL
   uint16_t packetID; // autoincrementing packet number for detection of chunk transmission
