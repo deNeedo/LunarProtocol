@@ -11,7 +11,7 @@ void setFlag() {
 }
 
 void initRadio() {
-  int state = radio.begin(868.6, 500.0, 12, 8);
+  int state = radio.begin(868.6, 125.0, 12, 8);
   if (state == RADIOLIB_ERR_NONE) {
     Serial.println("Radio OK");
     pinMode(LORA_LED, OUTPUT);
@@ -37,23 +37,21 @@ bool checkReadiness() {
   return true;
 }
 
-bool sendPacket(Packet* pkt, uint8_t number) {
-  for (int m = 0; m < number; m++) {
-    int state = radio.transmit((uint8_t*)pkt, sizeof(Packet));
-    if (state == RADIOLIB_ERR_NONE) continue;
-    return false;
-  }
+bool sendPacket(Packet* pkt) {
+  int state = radio.transmit((uint8_t*)pkt, sizeof(Packet));
+  if (state != RADIOLIB_ERR_NONE) return false;
   packetCounter++; return true;
 }
 
-bool receivePacket(Packet* pkt, uint8_t type) {
-  int state = radio.receive((uint8_t*)pkt, sizeof(Packet), PING_TIMEOUT);
-  if (state == RADIOLIB_ERR_NONE) {
-    if (pkt->type == type) {
-      if (pkt->sender == DEVICE_ID) return false; /*ignore own*/
-      if (pkt->receiver != DEVICE_ID && pkt->receiver != 255) return false; /*ignore not for me*/
-      blink(); return true;
-    }
-  }
-  return false;
+bool receivePacket(Packet* pkt, uint8_t expectedType) {
+  int state = radio.receive((uint8_t*)pkt, sizeof(Packet));
+  if (state != RADIOLIB_ERR_NONE) return false;
+  if (pkt->type != expectedType) return false;
+  if (pkt->sender == DEVICE_ID) return false;
+  if (pkt->receiver != DEVICE_ID && pkt->receiver != 255) return false;
+  blink(); return true;
+}
+
+uint32_t timeNow() {
+  return (millis() - syncTimeLocal);
 }

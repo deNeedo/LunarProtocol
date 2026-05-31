@@ -5,14 +5,12 @@
 #include "RadioManager.h"
 #include "StateMachine.h"
 
-bool pingDevice(uint8_t SID, uint8_t RID);
+bool diagnoseDevice(uint8_t SID, uint8_t RID);
 
-void measureDistance(uint8_t SID, uint8_t RID);
+bool syncClocks(uint8_t SID);
 
-bool clockSync(uint8_t SID, bool syncedFlag);
+bool pingDevices(uint8_t SID);
 
-void syncClocks(uint8_t SID);
+void relayPing(uint8_t SID, uint8_t RRID, uint8_t RID, bool flag);
 
-void runDiagnostics();
-
-void relayCommsTest();
+void networkDiagnostics();

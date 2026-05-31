@@ -11,7 +11,6 @@ void setup() {
 }
 
 void loop() {
-  // runDiagnostics();
-  // relayCommsTest();
-  measureDistance(0, 1);
+  // networkDiagnostics();
+  diagnoseDevice(0, 1);
 }

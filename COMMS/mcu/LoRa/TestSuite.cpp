@@ -1,45 +1,28 @@
 #include "TestSuite.h"
 
-bool pingDevice(uint8_t SID, uint8_t RID) {
+bool diagnoseDevice(uint8_t SID, uint8_t RID) {
   if (SID == RID) {pingResult = 0; return false;}
   if (DEVICE_ID == SID) {
-    messageCounter = 0; memset(pingTimings, 0, sizeof pingTimings);
+    messageCounter = 0;
     pktOut = createPacket(1, DEVICE_ID, RID, packetCounter, 0, millis(), "PING");
-    sendPacket(&pktOut, 1);
+    sendPacket(&pktOut);
     uint32_t beginPing = pktOut.processing;
-    while(millis() - beginPing < PING_TIMEOUT) {
+    while(millis() < beginPing + PING_TIMEOUT) {
       if (receivePacket(&pktIn, 2)) {
         uint32_t endPing = millis();
-        pingTimings[messageCounter] = (endPing - (beginPing + pktIn.processing)) / 2;
-        messageCounter++;
+        uint32_t ping = (endPing - (beginPing + pktIn.processing)) / 2;
+        float rssi = radio.getRSSI(true); float snr  = radio.getSNR();
+        Serial.printf("DEVICE_%d: Packet received. RSSI: %f | SNR: %f | PING: %lu\n", DEVICE_ID, rssi, snr, ping);
+        return true;
       }
     }
-    uint16_t avgPing = 0; uint8_t avgSamples = 0;
-    for (int m = 0; m < MESSAGE_CHUNK_SIZE; m++) {
-      if (pingTimings[m] == 0) continue;
-      avgPing += pingTimings[m]; avgSamples++;
-    }
-    if (avgSamples == 0) {
-      pingResult = 0;
-      Serial.printf("Unable to ping rover %d\n", RID);
-      return true;
-    } else {
-      pingResult = avgPing / avgSamples;
-      Serial.printf("Average ping to rover %d: %lu\n", RID, pingResult);
-      return true;
-    }
+    Serial.printf("Unable to ping rover %d\n", RID);
+    return false;
   }
   if (DEVICE_ID == RID) {
     if (receivePacket(&pktIn, 1)) {
-      /*ADDITIONAL TEST*/
-      if (pktIn.sender == 0 && pktIn.receiver == 1) {return false;}
-      /*ADDITIONAL TEST*/
-      uint32_t timeOfArrival = millis();
-      for (int m = 0; m < MESSAGE_CHUNK_SIZE; m++) {
-        uint32_t timeOfDeparture = millis();
-        pktOut = createPacket(2, DEVICE_ID, pktIn.sender, packetCounter, 0, (timeOfDeparture - timeOfArrival), "PONG");
-        sendPacket(&pktOut, 1);
-      }
+      pktOut = createPacket(2, DEVICE_ID, pktIn.sender, packetCounter, 0, 0, "PONG");
+      sendPacket(&pktOut);
       return true;
     } else {
       return false;
@@ -47,178 +30,226 @@ bool pingDevice(uint8_t SID, uint8_t RID) {
   }
 }
 
-void measureDistance(uint8_t SID, uint8_t RID) {
-  if (DEVICE_ID == SID) {
-    pktOut = createPacket(1, DEVICE_ID, RID, packetCounter, 0, millis(), "PING");
-    sendPacket(&pktOut, 1);
-    Serial.printf("DEVICE_%d: Packet sent.\n", DEVICE_ID);
-    if (receivePacket(&pktIn, 2)) {
-      float rssi = radio.getRSSI(true); float snr  = radio.getSNR();
-      Serial.printf("DEVICE_%d: Packet received. RSSI: %f | SNR: %f\n", DEVICE_ID, rssi, snr);
-    }
-  }
-  if (DEVICE_ID == RID) {
-    if (receivePacket(&pktIn, 1)) {
-      float rssi = radio.getRSSI(true); float snr  = radio.getSNR();
-      Serial.printf("DEVICE_%d: Packet received. RSSI: %f | SNR: %f\n", DEVICE_ID, rssi, snr);
-      pktOut = createPacket(2, DEVICE_ID, pktIn.sender, packetCounter, 0, millis(), "PONG");
-      sendPacket(&pktOut, 1);
-      Serial.printf("DEVICE_%d: Packet sent.\n", DEVICE_ID);
-    }
-  }
-}
+bool syncClocks() {
+  memset(reachable, false, sizeof(reachable));
+  memset(incomingQueue, 0, sizeof(incomingQueue));
+  memset(pingTimings, 0, sizeof(pingTimings));
 
-bool clockSync(uint8_t SID, bool syncedFlag) {
-  /*START SYNC PROCESS*/
-  if (DEVICE_ID != SID) {
-    while (true) {
-      Serial.printf("DEVICE_%d: Waiting for SYNC packet.\n", DEVICE_ID);
-      if (receivePacket(&pktIn, 5)) {
-        Serial.printf("DEVICE_%d: Received SYNC packet from DEVICE_%d.\n", DEVICE_ID, pktIn.sender);
-        if (syncedFlag) {
-          syncedTimeRelay = millis();
-        } else {
-          syncedTime = millis();
-        } break;
-      }
-    }
-  } else if (DEVICE_ID == SID) {
-    pktOut = createPacket(5, DEVICE_ID, 255, packetCounter, 0, 0, "SYNC");
-    sendPacket(&pktOut, MESSAGE_CHUNK_SIZE); packetCounter++;
-    Serial.printf("DEVICE_%d: Sent SYNC packets.\n", DEVICE_ID);
-    if (syncedFlag) {
-      syncedTimeRelay = millis();
-    } else {
-      syncedTime = millis();
-    }
-  }
-  /*RESET CONTROL VARIABLES*/
-  memset(ackArray, false, sizeof ackArray);
-  /*LISTEN IN DESIGNATED TIME WINDOWS*/
-  uint32_t compTime;
-  if (syncedFlag) {
-    compTime = syncedTimeRelay;
-  } else {
-    compTime = syncedTime;
-  }
-  while ((millis() - compTime) < (DEVICE_ID * PING_TIMEOUT)) {
-    if (receivePacket(&pktIn, 6)) {
-      Serial.printf("DEVICE_%d: Received ACK_SYNC packet from DEVICE_%d.\n", DEVICE_ID, pktIn.sender);
-      ackArray[pktIn.sender] = true; pktIn = empty;
-      /*incomingQueue[messageCounter] = pktIn; messageCounter++;*/ 
-    }
-  }
-  pktOut = createPacket(6, DEVICE_ID, 255, packetCounter, 0, 0, "ACK_SYNC");
-  sendPacket(&pktOut, MESSAGE_CHUNK_SIZE); packetCounter++;
-  Serial.printf("DEVICE_%d: Sent ACN_SYNC packets.", DEVICE_ID);
-  while ((millis() - compTime) < (TOTAL_DEVICES * PING_TIMEOUT)) {
-    if (receivePacket(&pktIn, 6)) {
-      Serial.printf("DEVICE_%d: Received ACK_SYNC packet from DEVICE_%d.\n", DEVICE_ID, pktIn.sender);
-      ackArray[pktIn.sender] = true; pktIn = empty;
-      /*incomingQueue[messageCounter] = pktIn; messageCounter++;*/
-    }
-  }
-  Serial.printf("DEVICE_%d: Sync process completed.\n", DEVICE_ID);
-  for (int m = 0; m < TOTAL_DEVICES; m++) {
-    if (DEVICE_ID == m) continue;
-    if (ackArray[m] == 0) return false;
-    Serial.printf("DEVICE_%d: Device synced with DEVICE_%d? %d\n", DEVICE_ID, m, ackArray[m]);
-  }
-  return true;
-}
+  uint8_t ackCount = 0; bool roverSyncFailure = false; bool hubSynced = false;
 
-void startSync(uint8_t SID) {
-  if (DEVICE_ID != SID) {
-    while (true) {
-      Serial.printf("DEVICE_%d: Waiting for SYNC packet.\n", DEVICE_ID);
-      if (receivePacket(&pktIn, 3)) {syncedTime = millis(); break;}
-    }
-  } else if (DEVICE_ID == SID) {
-    pktOut = createPacket(3, DEVICE_ID, 255, packetCounter, 0, 0, "SYNC");
-    sendPacket(&pktOut, MESSAGE_CHUNK_SIZE); packetCounter++;
-    Serial.printf("DEVICE_%d: Sent SYNC packets.\n", DEVICE_ID);
-    syncedTime = millis();
-  }
-}
+  // ==================================================
+  // HUB
+  // ==================================================
 
-void syncClocks(uint8_t SID) {
-  memset(ackArray, false, sizeof ackArray); 
-  if (DEVICE_ID != SID) {
-    while (true) {
-      if (pingDevice(SID, DEVICE_ID)) {
-        break;
-      }
-    }
-    // while (true) {
-    //   // if ()
-    // }
-  } else if (DEVICE_ID == SID) {
-    uint8_t m = 0;
-    while (m < TOTAL_DEVICES) {
-      if (m == DEVICE_ID) {m++; continue;}
-      if (pingDevice(DEVICE_ID, m)) {
-        m++;
-      }
-    }
-  }
-}
+  if (DEVICE_ID == 0) {
+    pktOut = createPacket(5, DEVICE_ID, 255, packetCounter, 0, millis(), "SYNC");
+    syncTimeLocal = pktOut.processing; sendPacket(&pktOut);
+    Serial.printf("DEVICE_%d: SYNC broadcast sent.\n", DEVICE_ID);
 
+    uint32_t timeout = syncTimeLocal + TOTAL_DEVICES * SLOT_DELAY;
 
-void relayCommsTest() {
-  uint8_t tries = 0;
-  if (DEVICE_ID != 2) {
-    while (tries < 3) {
-      pingDevice(0, 1);
-      if (pingResult == 0) tries++;
-      else {Serial.println("Ping success"); return;}
-    }
-    Serial.println("Trying relay method");
-    if (DEVICE_ID == 0) {
-      pingDevice(0, 2);
-      if (pingResult != 0) {
-        delay(1000);
-      }
-    }
-    if (DEVICE_ID == 1) {
-      while (true) {
-        Serial.println("Trying relay method");
-        pingDevice(2, 1);
-        if (pingResult != 0) break;
-        delay(1000);
-      }
-    }
-  }
-  if (DEVICE_ID == 2) {
-    while (true) {
-      Serial.println("Trying relay method 1/2");
-      pingDevice(0, 2);
-      if (pingResult != 0) {
-        Serial.println("Trying relay method 2/2");
-        pingDevice(2, 1);
-        if (pingResult != 0) {
-          Serial.println("Ping success"); return;
+    while (millis() < timeout) {
+      if (receivePacket(&pktIn, 6)) {
+        uint8_t sender = pktIn.sender;
+        if (!reachable[sender]) {
+          reachable[sender] = true;
+          incomingQueue[sender] = pktIn;
+          pingTimings[sender] = millis();
+          ackCount++;
+          Serial.printf("DEVICE_%d: ACK_SYNC from DEVICE_%d\n", DEVICE_ID, sender);
+          if (ackCount >= TOTAL_DEVICES - 1) {break;}
         }
       }
     }
+
+    for (uint8_t d = 1; d < TOTAL_DEVICES; d++) {
+      if (!reachable[d]) {
+        Serial.printf("DEVICE_%d: DEVICE_%d unreachable\n", DEVICE_ID, d); roverSyncFailure = true; continue;
+      }
+      Serial.printf("DEVICE_%d: DEVICE_%d reachable\n", DEVICE_ID, d);
+      if (!hubSynced) {
+        uint32_t obtaining = pingTimings[d];
+        uint32_t processing = incomingQueue[d].processing;
+        uint32_t timeCorrection = (obtaining - (syncTimeLocal + processing)) / 2;
+        syncTimeLocal += timeCorrection; hubSynced = true;
+      }
+    }
+    
+    if (roverSyncFailure) return false;
+    pktOut = createPacket(2, DEVICE_ID, 255, packetCounter, 0, 0, "ACK_SYNC");
+    sendPacket(&pktOut);
+    return true;
+  }
+
+  // ==================================================
+  // ROVERS
+  // ==================================================
+
+  while (true) {
+    if (receivePacket(&pktIn, 5)) {
+      syncTimeLocal = millis();
+      Serial.printf("DEVICE_%d sync initiated.\n", DEVICE_ID); break;
+    }
+  }
+
+  uint32_t slotTime = syncTimeLocal + FLAT_DELAY + DEVICE_ID * SLOT_DELAY;
+
+  while (millis() < slotTime) {/*WAIT*/}
+  pktOut = createPacket(6, DEVICE_ID, 0, packetCounter, 0, 0, "ACK_SYNC");
+  pktOut.processing = millis() - syncTimeLocal;
+  sendPacket(&pktOut);
+  Serial.printf("DEVICE_%d sent ACK_SYNC.\n", DEVICE_ID);
+  return true;
+}
+
+
+bool pingDevices(uint8_t SID) {
+
+  // ==========================================
+  // HUB
+  // ==========================================
+
+  if (DEVICE_ID == SID) {
+    outOfRange = 0;
+    memset(pingTimings, 0, sizeof(pingTimings));
+    memset(reachable, false, sizeof(reachable));
+    pktOut = createPacket(1, DEVICE_ID, 255, packetCounter, 1, timeNow(), "PING");
+    uint32_t pingStart = pktOut.processing;
+    sendPacket(&pktOut);
+    Serial.printf("DEVICE_%d: Sending packet\n", DEVICE_ID);
+    uint32_t timeout = pingStart + TOTAL_DEVICES * PING_TIMEOUT;
+    uint8_t results = 0;
+    while (timeNow() < timeout) {
+      if (receivePacket(&pktIn, 2)) {
+        uint8_t sender = pktIn.sender;
+        reachable[sender] = true;
+        pingTimings[sender] = pktIn.processing - pingStart;
+        Serial.printf("DEVICE_%d: Received packet from DEVICE_%d with local time: %lu | Ping: %lu\n", DEVICE_ID, sender, pktIn.processing, pingTimings[sender]);
+        results++;
+      }
+      if (results >= TOTAL_DEVICES - 1) return true;
+    }
+    for (int m = 0; m < TOTAL_DEVICES; m++) {
+      if (!reachable[m]) {
+        if (m == DEVICE_ID) continue;
+        outOfRange += m;
+        Serial.printf("DEVICE_%d: Unable to ping DEVICE_%d. Trying relay method...\n", DEVICE_ID, m);
+      }
+    }
+    return false;
+  }
+
+  // ==========================================
+  // ROVER
+  // ==========================================
+
+  if (receivePacket(&pktIn, 1)) {
+    uint32_t receiveTime = timeNow();
+    uint32_t slotTime = receiveTime + FLAT_DELAY + DEVICE_ID * PING_TIMEOUT;
+
+    while (timeNow() < slotTime) {}
+    pktOut = createPacket(2, DEVICE_ID, 0, packetCounter, 0, receiveTime, "ACK");
+    /*SOFTWARE BLOCKADE OF COMMUNICATION*/
+    // if (DEVICE_ID == 1 && commsBlock) return false;
+    if (DEVICE_ID == 2 && commsBlock) return false;
+    /*SOFTWARE BLOCKADE OF COMMUNICATION*/
+    sendPacket(&pktOut);
+    Serial.printf("DEVICE_%d: Sending packet with local time: %lu\n", DEVICE_ID, receiveTime);
+    Serial.printf("DEVICE_%d: PING to DEVICE_%d: %lu ms\n", DEVICE_ID, pktIn.sender, (receiveTime - pktIn.processing));
+    return true;
+  }
+  return false;
+}
+
+void relayPing(uint8_t SID, uint8_t RRID, uint8_t RID, bool flag) {
+  uint32_t temp; uint8_t sender; uint8_t number;
+  if (DEVICE_ID == SID && !flag) {
+    while (timeNow() % CYCLE < (CYCLE_RELAY + CYCLE_OFFSET)) {/*WAIT*/}
+    // Serial.printf("Hello from relayPing, I am DEVICE_%d and my flag is set to %d\n", DEVICE_ID, flag);
+    if (outOfRange == RRID) {number = RRID; RRID = RID; RID = number;}
+    else if (outOfRange == (RRID + RID)) {return;}
+    Serial.printf("DEVICE_%d: Sending relay packet to device %d through device %d\n", DEVICE_ID, RID, RRID);
+    temp = timeNow();
+    pktOut = createPacket(3, DEVICE_ID, RRID, packetCounter, 0, temp, "RELAY");
+    sendPacket(&pktOut);
+    while ((timeNow() % CYCLE >= (CYCLE_RELAY + CYCLE_OFFSET)) && (timeNow() % CYCLE < (CYCLE - 3 * CYCLE_OFFSET))) {
+      Serial.printf("DEVICE_%d: Inside RELAY loop, time: %lu\n", DEVICE_ID, (timeNow() % CYCLE));
+      if (receivePacket(&pktIn, 4)) {
+        sender = pktIn.sender;
+        Serial.printf("DEVICE_%d: Received ACK for relay packet from DEVICE_%d through DEVICE_%d with ping: %lu\n", DEVICE_ID, sender, RRID, (pktIn.processing - temp));
+        break;
+      }
+    }
+  }
+  else if (DEVICE_ID == RRID && !flag) {number = RRID; RRID = RID; RID = number;}
+  else if (DEVICE_ID == RID && flag) {number = RRID; RRID = RID; RID = number;}
+  if (DEVICE_ID == RRID) {
+    while (timeNow() % CYCLE < CYCLE_RELAY) {/*WAIT*/}
+    // Serial.printf("Hello from relayPing, I am DEVICE %d and my flag is set to %d\n", DEVICE_ID, flag);
+    while ((timeNow() % CYCLE >= CYCLE_RELAY) && (timeNow() % CYCLE < (CYCLE - 3 * CYCLE_OFFSET))) {
+      Serial.printf("DEVICE_%d: Inside RELAY loop, time: %lu\n", DEVICE_ID, (timeNow() % CYCLE));
+      if (receivePacket(&pktIn, 3)) {
+        temp = timeNow();
+        sender = pktIn.sender;
+        Serial.printf("DEVICE_%d: Received relay packet from DEVICE_%d for DEVICE_%d with ping: %lu\n", DEVICE_ID, sender, RID, (temp - pktIn.processing));
+        pktOut = pktIn;
+        pktOut.receiver = RID;
+        sendPacket(&pktOut); break;
+      }
+    }
+    while ((timeNow() % CYCLE >= CYCLE_RELAY) && (timeNow() % CYCLE < (CYCLE - 3 * CYCLE_OFFSET))) {
+      Serial.printf("DEVICE_%d: Inside RELAY loop, time: %lu\n", DEVICE_ID, (timeNow() % CYCLE));
+      if (receivePacket(&pktIn, 4)) {
+        temp = timeNow();
+        sender = pktIn.sender;
+        Serial.printf("DEVICE_%d: Received ACK for relay packet from DEVICE_%d for DEVICE_%d with ping: %lu\n", DEVICE_ID, sender, SID, (temp - pktIn.processing));
+        pktOut = pktIn;
+        pktOut.receiver = SID;
+        sendPacket(&pktOut); break;
+      }
+    }
+  }
+  
+  if (DEVICE_ID == RID) {
+    while (timeNow() % CYCLE < (CYCLE_RELAY - CYCLE_OFFSET)) {/*WAIT*/}
+    // Serial.printf("Hello from relayPing, I am DEVICE %d and my flag is set to %d\n", DEVICE_ID, flag);
+    while ((timeNow() % CYCLE >= (CYCLE_RELAY - CYCLE_OFFSET)) && (timeNow() % CYCLE < (CYCLE - 3 * CYCLE_OFFSET))) {
+      Serial.printf("DEVICE_%d: Inside RELAY loop, time: %lu\n", DEVICE_ID, (timeNow() % CYCLE));
+      if (receivePacket(&pktIn, 3)) {
+        temp = timeNow();
+        sender = pktIn.sender;
+        Serial.printf("DEVICE_%d: Received relay packet from DEVICE_%d through DEVICE_%d with ping: %lu\n", DEVICE_ID, sender, RRID, (temp - pktIn.processing));
+        pktOut = createPacket(4, DEVICE_ID, RRID, packetCounter, 0, temp, "ACK_RELAY");
+        Serial.printf("DEVICE_%d: Sending ACK relay packet to device %d through device %d\n", DEVICE_ID, SID, RRID);
+        sendPacket(&pktOut); break;
+      }
+    }
   }
 }
 
-void runDiagnostics() {
-  // if (clockSync(0, false)) {
-  //   Serial.printf("DEVICE_%d: Current time: %lu\n", DEVICE_ID, millis() - syncedTime);
-  //   if (clockSync(1, true)) {
-  //     Serial.printf("DEVICE_%d: Current time: %lu\n", DEVICE_ID, millis() - syncedTimeRelay);
-  //     if (DEVICE_ID == 0) {
-  //       if (receivePacket(&pktIn, 4)) {
-  //         syncedTime = syncedTimeRelay - pktIn.processing;
-  //       }
-  //     } else if (DEVICE_ID == 2) {
-  //       pktOut = createPacket(4, DEVICE_ID, 0, packetCounter, 0, (syncedTimeRelay - syncedTime), "CORRECT");
-  //       sendPacket(&pktOut, MESSAGE_CHUNK_SIZE); packetCounter++;
-  //     }
-  //   }
-  // }
-  startSync(0);
-  syncClocks(0);
+void networkDiagnostics() {
+  if (readyToPlay == false) {
+    if (syncClocks()) {readyToPlay = true;}
+    if (DEVICE_ID != 0) {
+      uint32_t timeout = syncTimeLocal + TOTAL_DEVICES * SLOT_DELAY;
+      while (millis() < timeout) {
+        readyToPlay = false;
+        if (receivePacket(&pktIn, 2)) {
+          readyToPlay = true; break;
+        }
+      }
+    }
+  } else {
+    while (true) {
+      if (timeNow() >= 50000 && !commsBlock) {commsBlock = true;} // software block for comms
+      if (timeNow() % CYCLE < CYCLE_DELAY) {
+        Serial.printf("DEVICE_%d: New cycle, current time: %lu\n", DEVICE_ID, (timeNow() % CYCLE));
+        bool flag = pingDevices(0);
+        Serial.printf("DEVICE_%d: Relay method, current time: %lu\n", DEVICE_ID, (timeNow() % CYCLE));
+        relayPing(0, 1, 2, flag);
+        Serial.printf("DEVICE_%d: End of cycle, current time: %lu\n", DEVICE_ID, (timeNow() % CYCLE));
+      }
+    }
+  }
 }
 
