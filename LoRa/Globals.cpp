@@ -2,6 +2,7 @@
 
 bool ackArray[TOTAL_DEVICES] = {};
 bool readyToPlay = false;
+bool powerOn = true;
 
 uint8_t outOfRange = 0;
 bool commsBlock = false;

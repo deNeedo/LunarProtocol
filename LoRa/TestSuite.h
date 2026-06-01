@@ -3,7 +3,8 @@
 #include "Globals.h"
 #include "Packet.h"
 #include "RadioManager.h"
-#include "StateMachine.h"
+
+void powerConsumption();
 
 bool diagnoseDevice(uint8_t SID, uint8_t RID);
 

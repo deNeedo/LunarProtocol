@@ -11,6 +11,7 @@ void setup() {
 }
 
 void loop() {
-  networkDiagnostics();
-  // diagnoseDevice(0, 1);
+  // networkDiagnostics();
+  diagnoseDevice(0, 1);
+  // powerConsumption();
 }

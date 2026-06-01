@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "Packet.h"
 
-#define DEVICE_ID 0
+#define DEVICE_ID 1
 #define TOTAL_DEVICES 3
 #define SLOT_DELAY 4000
 #define FLAT_DELAY 500
@@ -17,6 +17,7 @@
 
 extern bool ackArray[TOTAL_DEVICES];
 extern bool readyToPlay;
+extern bool powerOn;
 
 extern uint8_t outOfRange;
 extern bool commsBlock;
